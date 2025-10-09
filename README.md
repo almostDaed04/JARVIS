@@ -53,7 +53,7 @@ Standard Python libraries like `os`, `sys`, `datetime`, `threading`, `time`, `qu
 SpeechRecognition>=3.11.0
 pygame>=2.4.0
 gTTS>=2.4.0
-pyautogui>=0.9.55
+pyautogui>=0.9.54
 requests>=2.31.0
 wikipedia>=1.4.0
 ```
