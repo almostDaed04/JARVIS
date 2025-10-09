@@ -1,0 +1,6 @@
+echo -e "venv/\ncoqui_env/\n__pycache__/\n*.pyc" > .gitignore
+
+coqui_env/
+venv/
+__pycache__/
+*.pyc
