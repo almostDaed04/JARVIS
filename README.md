@@ -51,6 +51,7 @@ Standard Python libraries like `os`, `sys`, `datetime`, `threading`, `time`, `qu
 ### requirements.txt
 ```
 SpeechRecognition>=3.11.0
+PyAudio>=0.2.14
 pygame>=2.4.0
 gTTS>=2.4.0
 pyautogui>=0.9.54
