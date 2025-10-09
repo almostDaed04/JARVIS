@@ -68,7 +68,8 @@ After setting up the environment and installing dependencies, run the main progr
 python main.py
 ```
 
-Activation
+## Activation
+
 To activate JARVIS, first say:
 ```
 Wake up JARVIS
@@ -78,7 +79,7 @@ Wake up JARVIS
 
 You can give JARVIS commands like:
 - "Hey JARVIS, what's the weather?"
-- "Play song on YouTube"
+- "Play `song name` on YouTube"
 - "Tell me a joke"
 - "Search Google for AI news"
 
