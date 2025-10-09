@@ -1,5 +1,6 @@
 # Speech recognition
 SpeechRecognition>=3.11.0
+PyAudio>=0.2.14
 
 # Audio and TTS
 pygame>=2.4.0
