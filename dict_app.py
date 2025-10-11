@@ -49,3 +49,24 @@ def close_app(query):
     for app in list(app_list.keys()):
         if app in query:
             os.system(f"pkill -f {app_list[app]}")
+
+def show_capabilities():
+    capabilities = """Sir, I can open and close applications, search on Google and YouTube, 
+    check weather and temperature, tell you the time, control volume, tell jokes, and roast you if you dare."""
+    
+    print("Preparing capabilities list...")
+    
+    print("\n" + "="*50)
+    print("JARVIS CAPABILITIES")
+    print("="*50)
+    print("• Open/Close Applications")
+    print("• Google Search")
+    print("• YouTube Search")
+    print("• Weather Information")
+    print("• Current Time")
+    print("• Volume Control")
+    print("• Roast Generator")
+    print("• Voice Commands")
+    print("="*50 + "\n")
+    
+    speak(capabilities)

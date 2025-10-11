@@ -30,7 +30,7 @@ def check_temp(query):
         
 # google search
 def google_search(query):
-    for word in ['google','google search']:
+    for word in ['google','google search','search']:
         query = query.replace(word,'')
         query.strip()
         
@@ -73,7 +73,7 @@ def get_roasted():
         "You're proof that even evolution takes breaks sometimes.",
         "You have something on your chin... no, the third one down.",
         "If I wanted to kill myself, I'd climb your ego and jump to your IQ.",
-        "You're like a software update. Whenever I see you, I think: 'Do I really need this right now?'",
+        "You're like a software update. Whenever I see you, I think: 'Do I really need this right now?",
         "You bring people so much joy… when you leave the room."
     ]
     burn = random.choice(roasts)

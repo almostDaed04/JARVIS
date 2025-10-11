@@ -6,7 +6,7 @@ from utils import speak
 
 r = sr.Recognizer()
 
-# --- Initialize pygame for playback ---
+# Initialize pygame for playback
 pygame.mixer.init()
 
     

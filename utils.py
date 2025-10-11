@@ -3,172 +3,165 @@ import time
 import tempfile
 import threading
 import subprocess
-from queue import Queue, Empty
-import datetime
-
 import speech_recognition as sr
 from gtts import gTTS
 
-# ---------------------------
-# Global state & locks
-# ---------------------------
+# Global state
 r = sr.Recognizer()
 _mic = None
 _mic_lock = threading.Lock()
 _speak_lock = threading.Lock()
+speech_interrupt = threading.Event()
+is_speaking = threading.Event()
 
-# ---------------------------
-# Microphone initialization
-# ---------------------------
 def init_microphone():
-    """Initialize and calibrate microphone once at startup (silently)."""
+    """Initialize microphone at startup."""
     global _mic
     with _mic_lock:
         if _mic is not None:
-            return  # already done
+            return
         try:
-            # Use default device/sample rate to avoid PortAudio/ALSA mismatches
-            _mic = sr.Microphone()  
+            _mic = sr.Microphone()
             with _mic as source:
-                # Conservative energy threshold to reduce false triggers
                 r.energy_threshold = 4000
                 r.dynamic_energy_threshold = True
-                # Short calibration to avoid ALSA timeouts
                 r.adjust_for_ambient_noise(source, duration=0.5)
-            print("✅ Microphone initialized")
+            print("✅ Microphone ready")
         except Exception as e:
-            # Re-raise but include helpful text
-            print(f"❌ Microphone initialization error: {e}")
+            print(f"❌ Mic error: {e}")
             _mic = None
             raise
 
-# ---------------------------
-# Speak (gTTS -> player) with safe subprocess handling
-# ---------------------------
 def speak(text):
-    """
-    Convert text -> mp3 (gTTS) and play, ensuring the player finishes before deleting file.
-    Uses mpg123 / ffplay / mpg321 / vlc in order of preference.
-    """
+    """Convert text to speech with interrupt capability."""
+    global speech_interrupt, is_speaking
+    
+    is_speaking.set()  # Signal that we're speaking
+    
     with _speak_lock:
+        speech_interrupt.clear()
         temp_file = None
+        
         try:
-            tts = gTTS(text=text, lang='en', tld='ca')
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-            tts.write_to_fp(temp_file)
-            temp_file.close()
-
-            # candidate players; ffplay includes -autoexit but ffplay may return earlier on some systems,
-            # so we use Popen and wait() to ensure OS file handle is released.
-            players = [
-                ['mpg123', '-q', temp_file.name],
-                ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet', temp_file.name],
-                ['mpg321', '-q', temp_file.name],
-                ['cvlc', '--play-and-exit', '--quiet', temp_file.name],
-            ]
-
-            played = False
-            for cmd in players:
-                try:
-                    # Use Popen so we can be absolutely sure the process completes before deleting file
-                    proc = subprocess.Popen(
-                        cmd,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        close_fds=True
-                    )
-                    # wait with a reasonable timeout to avoid blocking forever on buggy players
-                    proc.wait(timeout=15)
-                    played = True
+            # Split into sentences for interruptible speech
+            sentences = text.replace('!', '.').replace('?', '.').split('.')
+            sentences = [s.strip() for s in sentences if s.strip()]
+            
+            for sentence in sentences:
+                if speech_interrupt.is_set():
+                    print("⏹ Speech stopped")
                     break
-                except FileNotFoundError:
-                    # player not installed -> try next
-                    continue
-                except subprocess.TimeoutExpired:
+                
+                tts = gTTS(text=sentence, lang='en', tld='ca')
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+                tts.write_to_fp(temp_file)
+                temp_file.close()
+                
+                players = [
+                    ['mpg123', '-q', temp_file.name],
+                    ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet', temp_file.name],
+                    ['mpg321', '-q', temp_file.name],
+                    ['cvlc', '--play-and-exit', '--quiet', temp_file.name],
+                ]
+                
+                played = False
+                for cmd in players:
                     try:
-                        proc.kill()
-                    except Exception:
-                        pass
-                    continue
-                except Exception:
-                    # fallback to trying next player
-                    continue
-
-            if not played:
-                print("[Warning] No audio player found. Install one, e.g.: sudo apt-get install mpg123")
-        except Exception as e:
-            print(f"[Error in speak]: {e}")
-        finally:
-            # give OS a tiny moment to release file handles, then delete
-            if temp_file:
+                        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, 
+                                               stderr=subprocess.DEVNULL, close_fds=True)
+                        proc.wait(timeout=15)
+                        played = True
+                        break
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        try:
+                            proc.kill()
+                        except:
+                            pass
+                        continue
+                    except:
+                        continue
+                
+                if not played:
+                    print("[Warning] No audio player found")
+                
+                # Cleanup temp file
                 time.sleep(0.05)
                 try:
                     if os.path.exists(temp_file.name):
                         os.unlink(temp_file.name)
-                except Exception:
+                except:
                     pass
+                    
+        except Exception as e:
+            print(f"[Speak error]: {e}")
+        finally:
+            if temp_file:
+                try:
+                    if os.path.exists(temp_file.name):
+                        os.unlink(temp_file.name)
+                except:
+                    pass
+            
+            time.sleep(1.5)  # Wait for audio to finish and ambient noise to settle
+            is_speaking.clear()  # Done speaking
 
-# ---------------------------
-# Listening / recognition
-# ---------------------------
+def interrupt_speech():
+    """Stop ongoing speech."""
+    global speech_interrupt
+    speech_interrupt.set()
+
 def take_command():
-    """
-    Listen for a voice command quickly (no repeated calibration).
-    Returns recognized text or 'None' string on failure (to match your existing checks).
-    """
+    """Listen for voice command."""
     global _mic
-    # Ensure microphone is initialized
+    
     if _mic is None:
         try:
             init_microphone()
-        except Exception as e:
-            print("❌ Unable to initialize microphone for take_command():", e)
-            return 'None'
-
-    print("🎧 Listening...")
-
+        except:
+            return 'none'
+    
+    # Don't print if we're speaking
+    if not is_speaking.is_set():
+        print("🎧 Listening...")
+    
     try:
-        # Ensure only one thread enters the microphone context at a time
         with _mic_lock:
             with _mic as source:
-                # Shorter thresholds to avoid long blocking
                 r.pause_threshold = 0.8
                 audio = r.listen(source, phrase_time_limit=5, timeout=8)
-
-        print("🧠 Understanding...")
+        
+        if not is_speaking.is_set():
+            print("🧠 Understanding...")
         text = r.recognize_google(audio, language='en-in')
-        print(f"💬 You said: {text}\n")
+        
+        if not is_speaking.is_set():
+            print(f"💬 You said: {text}\n")
         return text
-
+        
     except sr.WaitTimeoutError:
-        print("⏱️  Timeout - no speech detected\n")
-        return 'None'
+        if not is_speaking.is_set():
+            print("⏱️  Timeout\n")
+        return 'none'
     except sr.UnknownValueError:
-        print("❓ Could not understand - try again\n")
-        return 'None'
+        if not is_speaking.is_set():
+            print("❓ Unclear\n")
+        return 'none'
     except sr.RequestError as e:
-        # network / Google API issues - don't treat it as memory corruption
-        print(f"❌ Recognition service error: {e}\n")
-        return 'None'
+        if not is_speaking.is_set():
+            print(f"❌ Service error: {e}\n")
+        return 'none'
     except Exception as e:
-        # This catches low-level errors (e.g., PortAudio issues). Attempt to recover.
-        print(f"❌ Unexpected error in take_command: {e}\nAttempting microphone reinitialization...")
+        if not is_speaking.is_set():
+            print(f"❌ Error: {e}")
         try:
-            # try reinitializing microphone once (may fix PortAudio glitches)
             with _mic_lock:
-                try:
-                    # attempt graceful close/recreate by dropping reference and re-init
-                    _mic = None
-                    init_microphone()
-                    print("🔁 Microphone reinitialized after error.")
-                except Exception as reinit_e:
-                    print("❌ Reinitialization failed:", reinit_e)
-                    _mic = None
-        except Exception:
+                _mic = None
+                init_microphone()
+                print("🔁 Mic reset")
+        except:
             pass
-        return 'None'
+        return 'none'
 
 def cleanup():
-    """Clean up resources before exit. (Left intentionally simple.)"""
-    # nothing to explicitly close for subprocess approach; leave hooks here for future resources
+    """Cleanup resources."""
     pass

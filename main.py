@@ -1,38 +1,41 @@
-import os
 import threading
 import datetime
 import time
-import sys
 from queue import Queue, Empty
-from utils import cleanup,init_microphone,take_command
+from utils import cleanup, init_microphone, take_command, interrupt_speech
 
-# Command queue for background listening
 command_queue = Queue()
 listening_active = threading.Event()
+is_active = False
 
 def listen_loop():
-    """Background thread that continuously listens for commands."""
+    """Background thread for listening."""
     while listening_active.is_set():
         try:
             query = take_command().lower()
             if query != 'none':
                 command_queue.put(query)
         except Exception as e:
-            print(f"[Listen loop error]: {e}")
-            time.sleep(0.5)
+            print(f"Listen error: {e}")
+        time.sleep(0.5)
 
-def process_active_command(query):
-    """Process commands when JARVIS is active (after 'wake up')."""
-    # lightweight local imports so module load is cheap
-    from dict_app import open_web_app, close_app
+def process_command(query):
+    """Process voice commands."""
+    from dict_app import open_web_app, close_app,show_capabilities
     from search_now import tell_joke, get_roasted, search_youtube, google_search, check_temp
-    from utils import speak  # using this speak is OK if utils imports from here; adjust if circular
-    import datetime
-
+    from utils import speak
+    
+    # Interrupt check FIRST
+    if 'stop' in query or 'quiet' in query or 'shut up' in query:
+        interrupt_speech()
+        return True
+    
     if 'open' in query or 'launch' in query:
         open_web_app(query)
     elif 'close' in query or 'off' in query:
         close_app(query)
+    elif 'capabilities' in query or 'can do' in query or 'help' in query:
+        show_capabilities()
     elif 'joke' in query:
         tell_joke()
     elif 'roast' in query:
@@ -50,72 +53,62 @@ def process_active_command(query):
     elif 'temperature' in query or 'weather' in query:
         check_temp(query)
     elif 'time' in query:
-        current_time = datetime.datetime.now().strftime('%H:%M')
-        speak(f'Sir the time is {current_time}')
-    elif 'go to sleep' in query:
-        speak('Sure Sir, You can call me anytime')
-        return False  # Signal to exit active mode
+        speak(f"Sir the time is {datetime.datetime.now().strftime('%H:%M')}")
+    elif 'sleep' in query:
+        speak('Sure Sir, call me anytime')
+        return False
     elif 'finally sleep' in query:
         speak('Going to sleep...')
         listening_active.clear()
-        return None  # Signal to exit program
-    return True  # Continue active mode
+        return None
+    return True
 
 def main():
-    """Main loop that manages JARVIS states."""
+    global is_active
+    
     try:
-        # Initialize microphone and show intro (ALL before listening starts)
-        from utils import init_microphone as util_init_mic  # adapt if you keep init in utils
-        from intro import intro_screen
-
-        # If utils.init_microphone exists and you want to call that, adapt accordingly.
-        # Here we call our local init_microphone
-        init_microphone()     # Silent calibration
+        init_microphone()
         try:
-            intro_screen()    # Display full intro if available
-        except Exception:
+            from intro import intro_screen
+            intro_screen()
+        except:
             pass
-
-        print("JARVIS is ready. Say 'wake up' to activate.\n")
+        
+        print("JARVIS ready. Say 'wake up' to activate.\n")
+        
         listening_active.set()
-        listen_thread = threading.Thread(target=listen_loop, daemon=True)
-        listen_thread.start()
-
-        is_active = False
-
+        threading.Thread(target=listen_loop, daemon=True).start()
+        
         while listening_active.is_set():
             try:
                 query = command_queue.get(timeout=0.5)
-
+                
                 if not is_active:
                     if 'wake up' in query:
                         try:
                             from greet_me import greet_me
                             greet_me()
-                        except Exception:
+                        except:
                             pass
                         is_active = True
-                        print("JARVIS is now active. Listening for commands...\n")
+                        print("JARVIS active\n")
                 else:
-                    result = process_active_command(query)
+                    result = process_command(query)
                     if result is None:
-                        # Exit program
                         break
                     elif result is False:
-                        # Go to sleep mode
                         is_active = False
-                        print("JARVIS is sleeping. Say 'wake up' to reactivate.\n")
-
+                        print("JARVIS sleeping\n")
+                        
             except Empty:
                 continue
             except KeyboardInterrupt:
-                print("\nShutting down JARVIS...")
+                print("\nShutting down...")
                 listening_active.clear()
                 break
-            except Exception as e:
-                print(f"[Main loop error]: {e}")
-                time.sleep(0.5)
-
+                
+    except Exception as e:
+        print(f"Error: {e}")
     finally:
         cleanup()
         print("JARVIS offline.")
