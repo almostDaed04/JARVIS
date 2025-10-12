@@ -2,10 +2,11 @@ import requests
 from utils import speak,take_command
 import webbrowser
 import wikipedia as googleScrap
+import os
+from dotenv import load_dotenv,dotenv_values
 
 
 query = take_command().lower()
-
 def check_temp(query):
     words = ['what','is','how','what\'s','temperature','temp','in','the','at']
     location = query
@@ -13,7 +14,8 @@ def check_temp(query):
         location = location.replace(word,'').strip()
     
     try:
-        api_key = "cfe436c6417b3cb55504d34902225eb5"  
+        load_dotenv
+        api_key = os.getenv('WEATHER_API_KEY')
         url = f"https://api.openweathermap.org/data/2.5/weather?q={location},uk&APPID={api_key}"
         
         response = requests.get(url)
