@@ -44,6 +44,7 @@ All dependencies are installed via `requirements.txt`. Major external libraries 
 - **gTTS** – Google Text-to-Speech
 - **pyautogui** – GUI automation
 - **requests** – making HTTP requests
+- **pyjokes** - calling api for jokes
 - **wikipedia** – searching and retrieving info from Wikipedia
 
 Standard Python libraries like `os`, `sys`, `datetime`, `threading`, `time`, `queue`, `subprocess`, `tempfile`, and `webbrowser` are built-in and do not require installation.
@@ -56,6 +57,7 @@ pygame>=2.4.0
 gTTS>=2.4.0
 pyautogui>=0.9.54
 requests>=2.31.0
+pyjokes>=0.8.3
 wikipedia>=1.4.0
 ```
 
