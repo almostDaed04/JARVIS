@@ -12,5 +12,8 @@ pyautogui>=0.9.54
 # HTTP requests
 requests>=2.31.0
 
+# Jokes Library
+pyjokes>=0.8.3
+
 # Wikipedia scraping
 wikipedia>=1.4.0
